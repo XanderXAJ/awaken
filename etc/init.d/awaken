@@ -1,0 +1,129 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          awaken
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0
+# Short-Description: Sets an alarm to boot the machine
+# Description: Sets an alarm to wake up the machine.
+# 	Overrides any currently set alarm.
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DESC="Awaken"
+NAME=awaken
+SCRIPTNAME=/etc/init.d/$NAME
+DEFAULT=/etc/default/$NAME
+
+# Read configuration file if present
+[ -r $DEFAULT ] && . $DEFAULT
+
+# Set default values
+# Grace period for checking which day to set the alarm for
+# Used to prevent the machine shutting down and then instantly booting afterwards
+GRACE_MINUTES=${GRACE_MINUTES:-5}
+
+
+
+# Load the VERBOSE setting and other rcS variables
+# If VERBOSE is enabled, you can output lots of logs
+. /lib/init/vars.sh
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
+. /lib/lsb/init-functions
+
+
+
+# Do not start if there is no time set
+if [ -z "$TIME" -a \( -z "$TIME_DAY_1" -o -z "$TIME_DAY_2" -o -z "$TIME_DAY_3" -o -z "$TIME_DAY_4" -o -z "$TIME_DAY_5" -o -z "$TIME_DAY_6" -o -z "$TIME_DAY_7" \) ]; then
+	log_failure_msg "Not starting $NAME: TIME and some of TIME_DAY_% have not been set in $DEFAULT"
+	exit 0
+fi
+
+
+
+# Returns the day of the week for the given time
+# 1 = Monday, 2 = Tuesday... 7 = Sunday
+get_day_of_week () {
+	echo `date '+%u' -d "$1"`
+}
+
+
+
+# Returns the scheduled switch-off time for the passed time
+# Reads the time stored in variables TIME_DAY_1..7,
+# decided by the day of the week. If it isn't set, reverts to
+# the value stored in TIME.
+get_target_time () {
+	# Get which day of the week it is
+	day=`get_day_of_week "$1"`
+
+	# Get the day-specific time if it has been set
+	day_time=\$TIME_DAY_$day
+	day_time=`eval echo $day_time`
+
+	# Return the day-specific time if set, otherwise the default
+	echo ${day_time:-$TIME}
+}
+
+
+
+do_stop () {
+	# Return:
+	#   0 if daemon has been stopped
+	#   1 if daemon was already stopped
+	#   2 if daemon could not be stopped
+	log_action_begin_msg "Setting wakeup alarm"
+
+	# Get the time in seconds from UNIX epoch
+	epoch_now=`date '+%s' -d "now + $GRACE_MINUTES minutes"`
+	target_today=`get_target_time "@$epoch_now"`
+	epoch_target_today=`date '+%s' -d "$target_today"`
+
+	# We want to boot the next time this particular time arrives.
+	# That means if we are before the time (e.g. 09:00) has occurred today,
+	# we boot today, otherwise we boot tomorrow.
+	# Time must be number of seconds from the UNIX epoch -- use date '+%s'
+	if [ $epoch_now -lt $epoch_target_today ]; then
+		WHEN=$epoch_target_today
+	else
+		target_tomorrow=`get_target_time "tomorrow"`
+		epoch_target_tomorrow=`date '+%s' -d "$target_tomorrow tomorrow"`
+		WHEN=$epoch_target_tomorrow
+	fi
+
+	# Output human readable date to demonstrate script is working
+	target_human=`date -Rd "@$WHEN"`
+	log_action_cont_msg "Setting to boot at $target_human"
+
+	# Which interface to output to
+	WHERE="/sys/class/rtc/rtc0/wakealarm"
+
+	# Clear any previously set alarm
+	echo 0 > $WHERE
+
+	# Set the alarm
+	echo $WHEN > $WHERE
+
+	log_action_end_msg 0
+}
+
+case "$1" in
+	start)
+		# No-op
+		;;
+	restart|reload|force-reload)
+		echo "Error: argument '$1' not supported" >&2
+		exit 3
+		;;
+	stop)
+		do_stop
+		;;
+	*)
+		echo "Usage: $0 start|stop" >&2
+		exit 3
+		;;
+esac
+

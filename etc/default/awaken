@@ -1,0 +1,22 @@
+# Defaults for awaken initscript
+# Sourced by /etc/init.d/boot-alarm
+
+# Grace period for checking which day to set the alarm for.
+# Used to prevent the machine shutting down and then instantly booting afterwards.
+GRACE_MINUTES="30"
+
+# The desired time in a format accepted by date -d
+# e.g. "0800", "19:00", "5pm"
+# Used as the default when the time hasn't been set for a particular day.
+TIME="0800"
+
+# Uncomment any of the following for days where you want to override the boot time
+# 1 = Monday, 2 = Tuesday... 7 = Sunday
+#TIME_DAY_1="0800"
+#TIME_DAY_2="0800"
+#TIME_DAY_3="0800"
+#TIME_DAY_4="0800"
+#TIME_DAY_5="0800"
+TIME_DAY_6="1000"
+TIME_DAY_7="1000"
+
